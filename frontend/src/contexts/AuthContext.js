@@ -91,10 +91,10 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
-  const register = async (email, password, name) => {
+  const register = async (email, password, name, isBusinessOwner = false, businessName = '') => {
     try {
       setError(null);
-      console.log('Attempting registration with:', { email, name });
+      console.log('Attempting registration with:', { email, name, isBusinessOwner, businessName });
       
       // Check if backend server is running
       try {
@@ -105,13 +105,42 @@ export const AuthProvider = ({ children }) => {
         return false;
       }
       
+      // Step 1: Register the user
       const response = await api.post('/auth/register', {
         email,
         password,
-        name
+        name,
+        is_business_owner: isBusinessOwner
       });
       
       console.log('Registration response:', response.data);
+      
+      // Step 2: If this is a business owner, create the business
+      if (isBusinessOwner && businessName) {
+        try {
+          // First, login to get a token
+          const loginResponse = await api.post('/auth/login', {
+            email,
+            password,
+            remember_me: false
+          });
+          
+          const { access_token } = loginResponse.data;
+          
+          // Create the business with the token
+          const businessResponse = await api.post('/businesses/register', 
+            { name: businessName },
+            { headers: { Authorization: `Bearer ${access_token}` } }
+          );
+          
+          console.log('Business creation response:', businessResponse.data);
+        } catch (businessError) {
+          console.error('Error creating business during registration:', businessError);
+          // We still consider registration successful even if business creation fails
+          // The user can create a business later
+        }
+      }
+      
       return true;
     } catch (error) {
       console.error('Registration error:', error);

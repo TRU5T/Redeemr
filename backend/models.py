@@ -8,8 +8,11 @@ class Business(Base):
     
     id = Column(Integer, primary_key=True, index=True)
     name = Column(String, index=True)
+    owner_id = Column(Integer, ForeignKey("users.id"), nullable=True)
+    is_approved = Column(Boolean, default=False)
     
     rewards = relationship("RedeemrReward", back_populates="business")
+    owner = relationship("User", back_populates="business")
 
 class RedeemrReward(Base):
     __tablename__ = "redeemr_rewards"
@@ -31,10 +34,12 @@ class User(Base):
     hashed_password = Column(String)
     is_active = Column(Boolean, default=True)
     is_superuser = Column(Boolean, default=False)
+    is_business_owner = Column(Boolean, default=False)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     last_login = Column(DateTime(timezone=True), nullable=True)
     
     transactions = relationship("Transaction", back_populates="user")
+    business = relationship("Business", back_populates="owner", uselist=False)
 
 class Transaction(Base):
     __tablename__ = "transactions"

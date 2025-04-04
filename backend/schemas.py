@@ -12,6 +12,18 @@ class TokenData(BaseModel):
 class BusinessCreate(BaseModel):
     name: str
 
+class BusinessRegister(BaseModel):
+    name: str
+
+class BusinessResponse(BaseModel):
+    id: int
+    name: str
+    owner_id: Optional[int] = None
+    is_approved: bool = False
+    
+    class Config:
+        from_attributes = True
+
 class RewardCreate(BaseModel):
     name: str
     points_required: int
@@ -20,6 +32,7 @@ class RewardCreate(BaseModel):
 class UserBase(BaseModel):
     email: EmailStr
     name: str
+    is_business_owner: bool = False
 
 class UserCreate(UserBase):
     password: str
@@ -41,6 +54,14 @@ class User(UserBase):
 
 class PasswordReset(BaseModel):
     email: EmailStr
+
+class PasswordResetRequest(BaseModel):
+    email: EmailStr
+
+class PasswordResetConfirm(BaseModel):
+    token: str
+    email: EmailStr
+    new_password: str
 
 class PasswordChange(BaseModel):
     current_password: str

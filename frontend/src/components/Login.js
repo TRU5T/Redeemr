@@ -10,10 +10,6 @@ import {
   Paper,
   Link,
   Alert,
-  Dialog,
-  DialogTitle,
-  DialogContent,
-  DialogActions,
   CircularProgress,
 } from '@mui/material';
 import { useAuth } from '../contexts/AuthContext';
@@ -21,16 +17,13 @@ import { useNavigate } from 'react-router-dom';
 
 function Login() {
   const navigate = useNavigate();
-  const { login, resetPassword, error } = useAuth();
+  const { login, error } = useAuth();
   const [formData, setFormData] = useState({
     email: '',
     password: '',
     rememberMe: false,
   });
   const [formErrors, setFormErrors] = useState({});
-  const [resetDialogOpen, setResetDialogOpen] = useState(false);
-  const [resetEmail, setResetEmail] = useState('');
-  const [resetSuccess, setResetSuccess] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
 
   const validateForm = () => {
@@ -76,26 +69,6 @@ function Login() {
       } finally {
         setIsLoading(false);
       }
-    }
-  };
-
-  const handleResetPassword = async () => {
-    if (!resetEmail || !/\S+@\S+\.\S+/.test(resetEmail)) {
-      return;
-    }
-    setIsLoading(true);
-    try {
-      const success = await resetPassword(resetEmail);
-      if (success) {
-        setResetSuccess(true);
-        setTimeout(() => {
-          setResetDialogOpen(false);
-          setResetSuccess(false);
-          setResetEmail('');
-        }, 3000);
-      }
-    } finally {
-      setIsLoading(false);
     }
   };
 
@@ -200,7 +173,7 @@ function Login() {
               <Link
                 component="button"
                 variant="body2"
-                onClick={() => setResetDialogOpen(true)}
+                onClick={() => navigate('/reset-password')}
               >
                 Forgot password?
               </Link>
@@ -221,39 +194,6 @@ function Login() {
           </Box>
         </Paper>
       </Box>
-
-      {/* Password Reset Dialog */}
-      <Dialog open={resetDialogOpen} onClose={() => setResetDialogOpen(false)}>
-        <DialogTitle>Reset Password</DialogTitle>
-        <DialogContent>
-          {resetSuccess ? (
-            <Alert severity="success">
-              If an account exists with this email, you will receive password reset instructions.
-            </Alert>
-          ) : (
-            <TextField
-              autoFocus
-              margin="dense"
-              id="resetEmail"
-              label="Email Address"
-              type="email"
-              fullWidth
-              variant="outlined"
-              value={resetEmail}
-              onChange={(e) => setResetEmail(e.target.value)}
-            />
-          )}
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setResetDialogOpen(false)}>Cancel</Button>
-          <Button 
-            onClick={handleResetPassword} 
-            disabled={resetSuccess || isLoading}
-          >
-            {isLoading ? <CircularProgress size={24} /> : 'Reset Password'}
-          </Button>
-        </DialogActions>
-      </Dialog>
     </Container>
   );
 }

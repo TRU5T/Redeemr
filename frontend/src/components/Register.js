@@ -9,6 +9,7 @@ import {
   Link,
   Alert,
   CircularProgress,
+  Divider,
 } from '@mui/material';
 import { useAuth } from '../contexts/AuthContext';
 import { useNavigate } from 'react-router-dom';
@@ -21,6 +22,7 @@ function Register() {
     email: '',
     password: '',
     confirmPassword: '',
+    businessName: '',
   });
   const [formErrors, setFormErrors] = useState({});
   const [isLoading, setIsLoading] = useState(false);
@@ -44,16 +46,24 @@ function Register() {
     if (formData.password !== formData.confirmPassword) {
       errors.confirmPassword = 'Passwords do not match';
     }
+    
+    // Business name is required for all users
+    if (!formData.businessName.trim()) {
+      errors.businessName = 'Business name is required';
+    }
+    
     setFormErrors(errors);
     return Object.keys(errors).length === 0;
   };
 
   const handleChange = (e) => {
     const { name, value } = e.target;
+    
     setFormData(prev => ({
       ...prev,
       [name]: value
     }));
+    
     // Clear errors when user starts typing
     if (formErrors[name]) {
       setFormErrors(prev => ({ ...prev, [name]: '' }));
@@ -71,10 +81,18 @@ function Register() {
         console.log('Submitting registration form with:', {
           email: formData.email,
           name: formData.name,
+          businessName: formData.businessName,
           password: '****' // Don't log actual password
         });
         
-        const success = await register(formData.email, formData.password, formData.name);
+        const success = await register(
+          formData.email, 
+          formData.password, 
+          formData.name, 
+          true, // Always register as business owner
+          formData.businessName
+        );
+        
         console.log('Registration result:', success);
         
         if (success) {
@@ -177,6 +195,22 @@ function Register() {
               error={!!formErrors.confirmPassword}
               helperText={formErrors.confirmPassword}
             />
+            
+            <Divider sx={{ my: 2 }} />
+            
+            <TextField
+              margin="normal"
+              required
+              fullWidth
+              name="businessName"
+              label="Business Name"
+              id="businessName"
+              value={formData.businessName}
+              onChange={handleChange}
+              error={!!formErrors.businessName}
+              helperText={formErrors.businessName}
+            />
+            
             <Button
               type="submit"
               fullWidth

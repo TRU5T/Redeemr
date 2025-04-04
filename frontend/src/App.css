@@ -52,3 +52,47 @@
   font-size: 1.1rem !important;
   padding: 0.5rem 0 !important;
 }
+
+/* Updated layout styles for the main content */
+.main-content {
+  padding-top: 64px; /* Height of the navbar */
+  min-height: calc(100vh - 64px);
+  box-sizing: border-box;
+}
+
+/* Navbar styles */
+.drawer-container {
+  display: flex;
+}
+
+.content-container {
+  flex-grow: 1;
+  padding: 24px;
+  transition: margin-left 0.3s ease;
+}
+
+/* Dashboard, Profile, Business cards */
+.card-container {
+  margin-bottom: 24px;
+  border-radius: 8px !important;
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1) !important;
+  transition: transform 0.2s, box-shadow 0.2s;
+}
+
+.card-container:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 10px 15px rgba(0, 0, 0, 0.1) !important;
+}
+
+/* Form elements */
+.form-container {
+  max-width: 800px;
+  margin: 0 auto;
+}
+
+/* Mobile responsiveness */
+@media (max-width: 600px) {
+  .content-container {
+    padding: 16px;
+  }
+}

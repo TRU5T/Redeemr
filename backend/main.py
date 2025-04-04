@@ -13,7 +13,9 @@ from auth_utils import (
     create_access_token,
     get_current_user,
     get_password_hash,
-    ACCESS_TOKEN_EXPIRE_MINUTES
+    ACCESS_TOKEN_EXPIRE_MINUTES,
+    create_password_reset_token,
+    verify_password_reset_token
 )
 
 # Create all tables if they don't exist
@@ -53,7 +55,8 @@ def register_user(user: schemas.UserCreate, db: Session = Depends(get_db)):
         name=user.name,
         hashed_password=hashed_password,
         is_active=True,
-        is_superuser=False
+        is_superuser=False,
+        is_business_owner=user.is_business_owner
     )
     db.add(db_user)
     db.commit()
@@ -139,7 +142,96 @@ def change_password(
     db.commit()
     return {"message": "Password updated successfully"}
 
-# 1️⃣ Create a Business
+# Add a business registration endpoint for regular users
+@app.post("/businesses/register", response_model=schemas.BusinessResponse)
+def register_business(
+    business_data: schemas.BusinessRegister,
+    current_user: models.User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    # Check if the user already has a business
+    if db.query(models.Business).filter(models.Business.owner_id == current_user.id).first() and not current_user.is_superuser:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="You already have a registered business."
+        )
+    
+    # Create the business - initially not approved
+    business = models.Business(
+        name=business_data.name,
+        owner_id=current_user.id,
+        is_approved=False
+    )
+    
+    db.add(business)
+    db.commit()
+    db.refresh(business)
+    
+    # Update user as business owner if not already
+    if not current_user.is_business_owner:
+        current_user.is_business_owner = True
+        db.commit()
+    
+    return business
+
+# Approve a business (admin only)
+@app.post("/businesses/{business_id}/approve")
+def approve_business(
+    business_id: int,
+    current_user: models.User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    # Check if user is superuser
+    if not current_user.is_superuser:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only administrators can approve businesses"
+        )
+    
+    # Find the business
+    business = db.query(models.Business).filter(models.Business.id == business_id).first()
+    if not business:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Business not found"
+        )
+    
+    # Update approval status
+    business.is_approved = True
+    db.commit()
+    db.refresh(business)
+    
+    return {"message": f"Business {business.name} has been approved"}
+
+# Reject a business (admin only)
+@app.post("/businesses/{business_id}/reject")
+def reject_business(
+    business_id: int,
+    current_user: models.User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    # Check if user is superuser
+    if not current_user.is_superuser:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only administrators can reject businesses"
+        )
+    
+    # Find the business
+    business = db.query(models.Business).filter(models.Business.id == business_id).first()
+    if not business:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Business not found"
+        )
+    
+    # Delete the business
+    db.delete(business)
+    db.commit()
+    
+    return {"message": f"Business {business.name} has been rejected and removed"}
+
+# 1️⃣ Create a Business (admin only)
 @app.post("/businesses/")
 def create_business(
     name: str,
@@ -181,8 +273,35 @@ def create_reward(name: str, points_required: int, business_id: int, db: Session
 
 # 3️⃣ List Businesses
 @app.get("/businesses/")
-def get_businesses(db: Session = Depends(get_db)):
+def get_businesses(current_user: models.User = Depends(get_current_user), db: Session = Depends(get_db)):
+    # Only superusers can see all businesses
+    if not current_user.is_superuser:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Not authorized to view all businesses"
+        )
     return db.query(models.Business).all()
+
+# Get the current user's business
+@app.get("/businesses/me")
+def get_my_business(current_user: models.User = Depends(get_current_user), db: Session = Depends(get_db)):
+    # Check if user is a business owner
+    if not current_user.is_business_owner and not current_user.is_superuser:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You are not a business owner"
+        )
+    
+    # Get the user's business
+    business = db.query(models.Business).filter(models.Business.owner_id == current_user.id).first()
+    
+    if not business:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="You don't have a registered business"
+        )
+    
+    return business
 
 # 4️⃣ List Rewards for a Business
 @app.get("/businesses/{business_id}/rewards/")
@@ -224,3 +343,72 @@ def delete_business(business_id: int, db: Session = Depends(get_db)):
 
     db.commit()
     return {"message": f"Business {business_id} and related data deleted."}
+
+# Password reset endpoints
+@app.post("/request-password-reset/")
+def request_password_reset(reset_data: schemas.PasswordResetRequest, db: Session = Depends(get_db)):
+    """
+    Initiates the password reset process.
+    In a production environment, this would send an email with the reset link.
+    """
+    user = db.query(models.User).filter(models.User.email == reset_data.email).first()
+    
+    # Always return success message whether user exists or not (for security)
+    # This prevents user enumeration
+    if not user:
+        print(f"Password reset requested for non-existent user: {reset_data.email}")
+        return {"message": "If an account exists with this email, a password reset link will be sent."}
+    
+    # Generate reset token
+    token = create_password_reset_token(user.email)
+    
+    # In a real application, you would send an email with the reset link
+    # For this demo, we'll just log the token and build a URL
+    reset_url = f"http://localhost:3000/reset-password?token={token}&email={user.email}"
+    print(f"Password reset URL for {user.email}: {reset_url}")
+    
+    return {"message": "If an account exists with this email, a password reset link will be sent."}
+
+@app.post("/reset-password/")
+def reset_password(reset_data: schemas.PasswordResetConfirm, db: Session = Depends(get_db)):
+    """
+    Completes the password reset process by verifying the token and updating the password.
+    """
+    # Check if user exists
+    user = db.query(models.User).filter(models.User.email == reset_data.email).first()
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid reset request"
+        )
+    
+    # Verify the reset token
+    if not verify_password_reset_token(reset_data.token, reset_data.email):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid or expired token"
+        )
+    
+    # Update the password
+    user.hashed_password = get_password_hash(reset_data.new_password)
+    db.commit()
+    
+    return {"message": "Password has been reset successfully"}
+
+# Get all users (admin only)
+@app.get("/users/all", response_model=List[schemas.User])
+def get_all_users(current_user: models.User = Depends(get_current_user), db: Session = Depends(get_db)):
+    # Check if user is superuser
+    if not current_user.is_superuser:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only administrators can view all users"
+        )
+    
+    # Get all users
+    users = db.query(models.User).all()
+    print(f"Returning {len(users)} users")
+    # For debugging - print first user details
+    if users:
+        print(f"First user: id={users[0].id}, email={users[0].email}, is_superuser={users[0].is_superuser}")
+    return users
