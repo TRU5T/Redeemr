@@ -4,6 +4,7 @@ import { AuthProvider, useAuth } from './contexts/AuthContext';
 import Login from './components/Login';
 import Register from './components/Register';
 import BusinessRegistration from './components/BusinessRegistration';
+import BusinessList from './components/BusinessList';
 import './App.css';
 
 // Protected Route component
@@ -34,6 +35,14 @@ function App() {
               element={
                 <ProtectedRoute>
                   <BusinessRegistration />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/businesses"
+              element={
+                <ProtectedRoute>
+                  <BusinessList />
                 </ProtectedRoute>
               }
             />

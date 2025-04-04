@@ -62,13 +62,19 @@ def register_user(user: schemas.UserCreate, db: Session = Depends(get_db)):
 
 @app.post("/auth/login", response_model=schemas.Token)
 def login(user_data: schemas.UserLogin, db: Session = Depends(get_db)):
+    print(f"Login attempt for email: {user_data.email}")
     user = authenticate_user(db, user_data.email, user_data.password)
+    
     if not user:
+        print(f"Authentication failed for email: {user_data.email}")
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Incorrect email or password",
             headers={"WWW-Authenticate": "Bearer"},
         )
+    
+    # Log user details
+    print(f"User authenticated: {user.email}, is_active: {user.is_active}, is_superuser: {user.is_superuser}")
     
     # Update last login time
     user.last_login = func.now()
@@ -81,6 +87,8 @@ def login(user_data: schemas.UserLogin, db: Session = Depends(get_db)):
     access_token = create_access_token(
         data={"sub": user.email}, expires_delta=access_token_expires
     )
+    
+    print(f"Access token generated for {user.email}")
     return {"access_token": access_token, "token_type": "bearer"}
 
 @app.post("/auth/token", response_model=schemas.Token)
@@ -138,16 +146,29 @@ def create_business(
     current_user: models.User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
+    print(f"User attempting to create business: {current_user.email}, is_superuser: {current_user.is_superuser}")
+    
     if not current_user.is_superuser:
+        print(f"Permission denied: user {current_user.email} is not a superuser")
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Not authorized to create businesses"
+            detail="Not authorized to create businesses. Superuser privileges required."
         )
-    business = models.Business(name=name)
-    db.add(business)
-    db.commit()
-    db.refresh(business)
-    return business
+    
+    try:
+        business = models.Business(name=name)
+        db.add(business)
+        db.commit()
+        db.refresh(business)
+        print(f"Business created successfully: {business.id}")
+        return business
+    except Exception as e:
+        print(f"Error creating business: {e}")
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Error creating business: {str(e)}"
+        )
 
 # 2️⃣ Create a Redeemr Reward
 @app.post("/rewards/")  
