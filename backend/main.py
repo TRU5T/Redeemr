@@ -1,47 +1,153 @@
-from fastapi import FastAPI, Depends
+from datetime import timedelta
+from typing import List
+from fastapi import FastAPI, Depends, HTTPException, status
+from fastapi.security import OAuth2PasswordRequestForm
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
-from pydantic import BaseModel  # <-- Add Pydantic import
-from database import SessionLocal, engine
-import models
+from sqlalchemy.sql import func
+from pydantic import BaseModel
+from database import SessionLocal, engine, get_db
+import models, schemas
+from auth_utils import (
+    authenticate_user,
+    create_access_token,
+    get_current_user,
+    get_password_hash,
+    ACCESS_TOKEN_EXPIRE_MINUTES
+)
 
+# Create all tables if they don't exist
 models.Base.metadata.create_all(bind=engine)
 
 app = FastAPI()
 
-# ✅ Allow CORS for frontend access
+# CORS middleware configuration
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # You can restrict this to ["http://localhost:3000"] if preferred
+    allow_origins=["http://localhost:3000"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-# Dependency for getting DB session
-def get_db():
-    db = SessionLocal()
-    try:
-        yield db
-    finally:
-        db.close()
+# Root endpoint for health check
+@app.get("/")
+def read_root():
+    return {"status": "ok", "message": "API is running"}
+
+# Authentication endpoints
+@app.post("/auth/register", response_model=schemas.User)
+def register_user(user: schemas.UserCreate, db: Session = Depends(get_db)):
+    # Check if user already exists
+    db_user = db.query(models.User).filter(models.User.email == user.email).first()
+    if db_user:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Email already registered"
+        )
+    
+    # Create new user
+    hashed_password = get_password_hash(user.password)
+    db_user = models.User(
+        email=user.email,
+        name=user.name,
+        hashed_password=hashed_password,
+        is_active=True,
+        is_superuser=False
+    )
+    db.add(db_user)
+    db.commit()
+    db.refresh(db_user)
+    return db_user
+
+@app.post("/auth/login", response_model=schemas.Token)
+def login(user_data: schemas.UserLogin, db: Session = Depends(get_db)):
+    user = authenticate_user(db, user_data.email, user_data.password)
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Incorrect email or password",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    
+    # Update last login time
+    user.last_login = func.now()
+    db.commit()
+    
+    # Create access token
+    access_token_expires = timedelta(
+        minutes=ACCESS_TOKEN_EXPIRE_MINUTES * 7 if user_data.remember_me else ACCESS_TOKEN_EXPIRE_MINUTES
+    )
+    access_token = create_access_token(
+        data={"sub": user.email}, expires_delta=access_token_expires
+    )
+    return {"access_token": access_token, "token_type": "bearer"}
+
+@app.post("/auth/token", response_model=schemas.Token)
+def login_for_access_token(
+    form_data: OAuth2PasswordRequestForm = Depends(),
+    db: Session = Depends(get_db)
+):
+    user = authenticate_user(db, form_data.username, form_data.password)
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Incorrect username or password",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    access_token_expires = timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
+    access_token = create_access_token(
+        data={"sub": user.email}, expires_delta=access_token_expires
+    )
+    return {"access_token": access_token, "token_type": "bearer"}
+
+@app.get("/auth/me", response_model=schemas.User)
+def read_users_me(current_user: models.User = Depends(get_current_user)):
+    return current_user
+
+@app.post("/auth/password-reset", response_model=dict)
+def request_password_reset(email_data: schemas.PasswordReset, db: Session = Depends(get_db)):
+    user = db.query(models.User).filter(models.User.email == email_data.email).first()
+    if user:
+        # In a real application, send password reset email here
+        return {"message": "If an account exists with this email, a password reset link will be sent."}
+    return {"message": "If an account exists with this email, a password reset link will be sent."}
+
+@app.post("/auth/change-password")
+def change_password(
+    password_data: schemas.PasswordChange,
+    current_user: models.User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    # Verify current password
+    if not authenticate_user(db, current_user.email, password_data.current_password):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Incorrect password"
+        )
+    
+    # Update password
+    current_user.hashed_password = get_password_hash(password_data.new_password)
+    db.commit()
+    return {"message": "Password updated successfully"}
 
 # 1️⃣ Create a Business
 @app.post("/businesses/")
-def create_business(name: str, db: Session = Depends(get_db)):
+def create_business(
+    name: str,
+    current_user: models.User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    if not current_user.is_superuser:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Not authorized to create businesses"
+        )
     business = models.Business(name=name)
     db.add(business)
     db.commit()
     db.refresh(business)
     return business
-
-@app.post("/businesses/")
-def create_business(business: BusinessCreate, db: Session = Depends(get_db)):
-    new_business = models.Business(name=business.name)
-    db.add(new_business)
-    db.commit()
-    db.refresh(new_business)
-    return new_business
 
 # 2️⃣ Create a Redeemr Reward
 @app.post("/rewards/")  

@@ -1,5 +1,7 @@
 .App {
   text-align: center;
+  min-height: 100vh;
+  background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
 }
 
 .App-logo {
@@ -35,4 +37,18 @@
   to {
     transform: rotate(360deg);
   }
+}
+
+/* Login page specific styles */
+.MuiPaper-root {
+  background-color: rgba(255, 255, 255, 0.95) !important;
+  backdrop-filter: blur(10px);
+}
+
+.MuiButton-contained {
+  background-color: #1976d2 !important;
+  color: white !important;
+  text-transform: none !important;
+  font-size: 1.1rem !important;
+  padding: 0.5rem 0 !important;
 }
