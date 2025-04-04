@@ -505,28 +505,28 @@ const AdminDashboard = () => {
                     </TableCell>
                   </TableRow>
                 ) : (
-                  users.map((user) => {
+                  users.map((userItem) => {
                     // Find business linked to this user
-                    const userBusiness = businesses.find(b => b.owner_id === user.id);
+                    const userBusiness = businesses.find(b => b.owner_id === userItem.id);
                     const businessName = userBusiness ? userBusiness.name : "None";
                     const businessStatus = userBusiness && !userBusiness.is_approved ? " (Pending)" : "";
                     
                     return (
-                      <TableRow key={user.id}>
-                        <TableCell>{user.id}</TableCell>
-                        <TableCell>{user.name}</TableCell>
-                        <TableCell>{user.email}</TableCell>
+                      <TableRow key={userItem.id}>
+                        <TableCell>{userItem.id}</TableCell>
+                        <TableCell>{userItem.name}</TableCell>
+                        <TableCell>{userItem.email}</TableCell>
                         <TableCell>
-                          {user.is_superuser ? (
+                          {userItem.is_superuser ? (
                             <Chip label="Admin" color="secondary" size="small" />
-                          ) : user.is_business_owner ? (
+                          ) : userItem.is_business_owner ? (
                             <Chip label="Business Owner" color="primary" size="small" />
                           ) : (
                             <Chip label="Standard User" size="small" />
                           )}
                         </TableCell>
                         <TableCell>
-                          {user.is_business_owner ? 
+                          {userItem.is_business_owner ? 
                             (businessName !== "None" ? 
                               <Box sx={{ display: 'flex', alignItems: 'center' }}>
                                 {businessName}{businessStatus}
@@ -550,8 +550,8 @@ const AdminDashboard = () => {
                             <Switch
                               edge="end"
                               size="small"
-                              checked={user.is_superuser}
-                              onChange={() => handleToggleUserRole(user.id)}
+                              checked={userItem.is_superuser}
+                              onChange={() => handleToggleUserRole(userItem.id)}
                             />
                           </Box>
                         </TableCell>
